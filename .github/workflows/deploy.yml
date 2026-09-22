@@ -71,7 +71,7 @@ jobs:
 
   deploy:
     name: Deploy Application
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [frontend-check, backend-check]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     steps:
