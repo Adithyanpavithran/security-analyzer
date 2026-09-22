@@ -74,18 +74,66 @@ jobs:
     runs-on: self-hosted
     needs: [frontend-check, backend-check]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    env:
+      DEPLOY_DIR: /srv/apps/security-analyzer
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download frontend build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: frontend/dist
-
-      - name: Deployment Step
+      - name: Sync files to deployment directory
         run: |
-          echo "Build and validation completed successfully."
-          echo "Ready to deploy frontend and backend."
-          # Configure your deployment target here (e.g., Vercel, Render, AWS, Docker, GitHub Pages, etc.)
+          mkdir -p "$DEPLOY_DIR"
+          if command -v rsync >/dev/null 2>&1; then
+            rsync -av \
+              --exclude='.git' \
+              --exclude='.env*' \
+              --exclude='*.db' \
+              --exclude='*.sqlite*' \
+              --exclude='reports' \
+              --exclude='venv' \
+              --exclude='backend/venv' \
+              --exclude='node_modules' \
+              --exclude='frontend/node_modules' \
+              ./ "$DEPLOY_DIR/"
+          else
+            find . -maxdepth 1 ! -name . ! -name .git ! -name '.env*' ! -name '*.db' ! -name '*.sqlite*' ! -name reports ! -name venv ! -name node_modules -exec cp -r -u -t "$DEPLOY_DIR/" {} +
+          fi
+
+      - name: Build frontend
+        run: |
+          cd "$DEPLOY_DIR/frontend"
+          npm ci
+          npm run build
+          echo "Frontend build completed successfully."
+
+      - name: Prepare backend Python environment
+        run: |
+          cd "$DEPLOY_DIR/backend"
+          if [ -d "venv" ]; then
+            echo "Using existing backend/venv"
+            source venv/bin/activate
+          elif [ -d "../venv" ]; then
+            echo "Using existing root venv"
+            source ../venv/bin/activate
+          else
+            echo "Creating new virtual environment at backend/venv"
+            python3 -m venv venv
+            source venv/bin/activate
+          fi
+
+          python3 -m pip install --upgrade pip
+          if [ -s requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          echo "Backend dependencies prepared successfully."
+
+      - name: Deployment summary
+        run: |
+          echo "=========================================="
+          echo "       DEPLOYMENT SUMMARY (Laptop B)      "
+          echo "=========================================="
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Deployment Directory: $DEPLOY_DIR"
+          echo "Frontend Build: SUCCESS"
+          echo "Backend Dependency Preparation: SUCCESS"
+          echo "=========================================="
