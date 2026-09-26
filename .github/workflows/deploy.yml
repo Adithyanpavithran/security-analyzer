@@ -145,8 +145,8 @@ jobs:
 
       - name: Restart backend
         run: |
-          sudo -n systemctl restart security-analyzer-backend.service
-          sudo -n systemctl is-active --quiet security-analyzer-backend.service
+          sudo -n /usr/bin/systemctl restart security-analyzer-backend.service
+          sudo -n /usr/bin/systemctl is-active --quiet security-analyzer-backend.service
           echo "Backend service restarted successfully."
 
       - name: Verify backend
