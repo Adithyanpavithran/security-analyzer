@@ -76,6 +76,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     env:
       DEPLOY_DIR: /srv/apps/security-analyzer
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,6 +84,7 @@ jobs:
       - name: Sync files to deployment directory
         run: |
           mkdir -p "$DEPLOY_DIR"
+
           if command -v rsync >/dev/null 2>&1; then
             rsync -av \
               --exclude='.git' \
@@ -96,7 +98,16 @@ jobs:
               --exclude='frontend/node_modules' \
               ./ "$DEPLOY_DIR/"
           else
-            find . -maxdepth 1 ! -name . ! -name .git ! -name '.env*' ! -name '*.db' ! -name '*.sqlite*' ! -name reports ! -name venv ! -name node_modules -exec cp -r -u -t "$DEPLOY_DIR/" {} +
+            find . -maxdepth 1 \
+              ! -name . \
+              ! -name .git \
+              ! -name '.env*' \
+              ! -name '*.db' \
+              ! -name '*.sqlite*' \
+              ! -name reports \
+              ! -name venv \
+              ! -name node_modules \
+              -exec cp -r -u -t "$DEPLOY_DIR/" {} +
           fi
 
       - name: Build frontend
@@ -109,12 +120,15 @@ jobs:
       - name: Prepare backend Python environment
         run: |
           cd "$DEPLOY_DIR/backend"
+
           if [ -d "venv" ]; then
             echo "Using existing backend/venv"
             source venv/bin/activate
+
           elif [ -d "../venv" ]; then
             echo "Using existing root venv"
             source ../venv/bin/activate
+
           else
             echo "Creating new virtual environment at backend/venv"
             python3 -m venv venv
@@ -122,18 +136,35 @@ jobs:
           fi
 
           python3 -m pip install --upgrade pip
+
           if [ -s requirements.txt ]; then
             pip install -r requirements.txt
           fi
+
           echo "Backend dependencies prepared successfully."
+
+      - name: Restart backend
+        run: |
+          sudo -n systemctl restart security-analyzer-backend.service
+          sudo -n systemctl is-active --quiet security-analyzer-backend.service
+          echo "Backend service restarted successfully."
+
+      - name: Verify backend
+        run: |
+          curl --fail --silent http://127.0.0.1:5000/health
+          echo
+          echo "Backend health check passed."
 
       - name: Deployment summary
         run: |
           echo "=========================================="
-          echo "       DEPLOYMENT SUMMARY (Laptop B)      "
+          echo "       11N11 SECURITY ANALYZER            "
+          echo "       HOME SERVER DEPLOYMENT              "
           echo "=========================================="
           echo "Commit SHA: ${{ github.sha }}"
           echo "Deployment Directory: $DEPLOY_DIR"
           echo "Frontend Build: SUCCESS"
           echo "Backend Dependency Preparation: SUCCESS"
+          echo "Backend Restart: SUCCESS"
+          echo "Health Check: SUCCESS"
           echo "=========================================="
